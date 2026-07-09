@@ -95,8 +95,16 @@
   .slot .tag-pill {
     position: absolute; top: 3px; left: 3px; background: #ffeb3b; color: #5d4037;
     font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
-    z-index: 5; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    z-index: 5; box-shadow: 0 1px 3px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 4px;
   }
+  .slot .tag-pill .pill-x { cursor: pointer; font-weight: 800; opacity: 0.7; }
+  .slot .reset-btn {
+    position: absolute; top: 3px; right: 3px; width: 22px; height: 22px;
+    background: rgba(255,255,255,0.9); border-radius: 50%; border: none;
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+    cursor: pointer; z-index: 5;
+  }
+  .slot .fallback-icon { font-size: 30px; }
 
   /* ---------- Word bank ---------- */
   .wordbank-wrap { padding: 6px 10px 10px; flex-shrink: 0; }
@@ -104,10 +112,16 @@
   .wordbank { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
   .word-btn {
     font-family: 'Poppins', sans-serif; font-weight: 600; font-size: 13px;
-    padding: 8px 14px; border-radius: 50px; border: none; cursor: pointer;
+    padding: 5px 14px 5px 5px; border-radius: 50px; border: none; cursor: pointer;
     background: #fff; color: #33691e; border: 2px solid #7cb342;
     box-shadow: 0 3px 0 #558b2f; transition: 0.1s;
+    display: inline-flex; align-items: center; gap: 6px;
   }
+  .word-thumb {
+    width: 26px; height: 26px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+    background: #e8f5e9; display: flex; align-items: center; justify-content: center; font-size: 15px;
+  }
+  .word-thumb video { width: 100%; height: 100%; object-fit: cover; }
   .word-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #558b2f; }
   .word-btn.selected { background: #43a047; color: #fff; box-shadow: 0 3px 0 #2e7d32; }
   .word-btn.done { display: none; }
@@ -207,6 +221,11 @@
     { id:'mum',     label:'Mum',     audio:'mum.mp3',     match:'mother' }
   ];
 
+  const emojiMap = {
+    grandfather:'👴', grandmother:'👵', father:'👨', mother:'👩', brother:'👦', sister:'👧',
+    grandpa:'👴', grandma:'👵', dad:'👨', mum:'👩'
+  };
+
   function shuffle(arr) {
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
@@ -267,7 +286,19 @@
       const btn = document.createElement('button');
       btn.className = 'word-btn';
       btn.id = 'word-' + w.id;
-      btn.innerText = w.label;
+
+      const thumb = document.createElement('span');
+      thumb.className = 'word-thumb';
+      const thumbVideo = document.createElement('video');
+      thumbVideo.src = w.video;
+      thumbVideo.muted = true; thumbVideo.loop = true; thumbVideo.playsInline = true;
+      thumbVideo.preload = 'metadata';
+      thumbVideo.addEventListener('loadeddata', () => thumbVideo.play().catch(() => {}));
+      thumbVideo.addEventListener('error', () => { thumb.innerText = emojiMap[w.id]; });
+      thumb.appendChild(thumbVideo);
+      btn.appendChild(thumb);
+      btn.appendChild(document.createTextNode(w.label));
+
       btn.onclick = () => onWordTap(w.id, 'core');
       bank1.appendChild(btn);
     });
@@ -277,7 +308,13 @@
       const btn = document.createElement('button');
       btn.className = 'word-btn syn';
       btn.id = 'word-' + w.id;
-      btn.innerText = w.label;
+
+      const thumb = document.createElement('span');
+      thumb.className = 'word-thumb';
+      thumb.innerText = emojiMap[w.id];
+      btn.appendChild(thumb);
+      btn.appendChild(document.createTextNode(w.label));
+
       btn.onclick = () => onWordTap(w.id, 'syn');
       bank2.appendChild(btn);
     });
@@ -302,8 +339,13 @@
   }
 
   function onSlotTap(slotId) {
-    if (!selected) return;
     const slotEl = document.getElementById('slot-' + slotId);
+
+    // No word selected: tapping a filled slot picks it back up so the student can change it
+    if (!selected) {
+      if (placedIds.has(slotId)) removeCorePlacement(slotId);
+      return;
+    }
 
     if (selected.type === 'core') {
       if (selected.id === slotId) {
@@ -327,8 +369,32 @@
   function correctCorePlacement(id) {
     const w = coreWords.find(x => x.id === id);
     const slotEl = document.getElementById('slot-' + id);
-    slotEl.innerHTML = `<video src="${w.video}" autoplay muted loop playsinline></video>
-      <button class="speaker-btn" onclick="event.stopPropagation(); playAudio('${w.audio}')">🔊</button>`;
+    slotEl.innerHTML = '';
+
+    const video = document.createElement('video');
+    video.src = w.video;
+    video.autoplay = true; video.muted = true; video.loop = true; video.playsInline = true;
+    video.className = 'video-slot-media';
+    video.addEventListener('error', () => {
+      const fallback = document.createElement('span');
+      fallback.className = 'fallback-icon';
+      fallback.innerText = emojiMap[id];
+      video.replaceWith(fallback);
+    });
+    slotEl.appendChild(video);
+
+    const speakerBtn = document.createElement('button');
+    speakerBtn.className = 'speaker-btn';
+    speakerBtn.innerText = '🔊';
+    speakerBtn.onclick = (e) => { e.stopPropagation(); playAudio(w.audio); };
+    slotEl.appendChild(speakerBtn);
+
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'reset-btn';
+    resetBtn.innerText = '↺';
+    resetBtn.onclick = (e) => { e.stopPropagation(); removeCorePlacement(id); };
+    slotEl.appendChild(resetBtn);
+
     slotEl.classList.add('flash-correct');
     setTimeout(() => slotEl.classList.remove('flash-correct'), 500);
     placedIds.add(id);
@@ -341,11 +407,35 @@
     checkFinish();
   }
 
+  function removeCorePlacement(id) {
+    const slotEl = document.getElementById('slot-' + id);
+
+    // If a synonym tag is attached to this slot, release it too
+    const pill = slotEl.querySelector('.tag-pill');
+    if (pill) {
+      const synId = pill.dataset.synId;
+      if (synId) {
+        taggedSyn--;
+        document.getElementById('word-' + synId).classList.remove('done');
+      }
+      pill.remove();
+    }
+
+    slotEl.innerHTML = `<span class="empty-hint">＋</span>
+      <button class="speaker-btn" onclick="event.stopPropagation(); playAudio('${coreWords.find(x=>x.id===id).audio}')">🔊</button>`;
+    placedIds.delete(id);
+    placedCore--;
+    document.getElementById('word-' + id).classList.remove('done');
+    clearSelection();
+    updateProgress();
+  }
+
   function correctSynPlacement(slotId, syn) {
     const slotEl = document.getElementById('slot-' + slotId);
     const pill = document.createElement('div');
     pill.className = 'tag-pill';
-    pill.innerText = '= ' + syn.label;
+    pill.dataset.synId = syn.id;
+    pill.innerHTML = `<span>= ${syn.label}</span><span class="pill-x" onclick="event.stopPropagation(); removeSynTag('${slotId}')">✕</span>`;
     slotEl.appendChild(pill);
     slotEl.classList.add('flash-correct');
     setTimeout(() => slotEl.classList.remove('flash-correct'), 500);
@@ -355,6 +445,18 @@
     clearSelection();
     updateProgress();
     checkFinish();
+  }
+
+  function removeSynTag(slotId) {
+    const slotEl = document.getElementById('slot-' + slotId);
+    const pill = slotEl.querySelector('.tag-pill');
+    if (!pill) return;
+    const synId = pill.dataset.synId;
+    pill.remove();
+    taggedSyn--;
+    document.getElementById('word-' + synId).classList.remove('done');
+    clearSelection();
+    updateProgress();
   }
 
   function wrongFeedback(slotEl) {
