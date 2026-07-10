@@ -82,12 +82,12 @@
     background: transparent;
   }
   .slot.selectable:active { transform: scale(0.96); }
-  .slot video { width: 100%; height: 100%; object-fit: contain; background: transparent; }
+  .slot video { width: 100%; height: 100%; object-fit: contain; background: #12a454; }
   .video-slot-media {
     border-radius: 14px; border: 3px solid rgba(255,255,255,0.85);
     box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+    background: #12a454;
   }
-  canvas.video-slot-media { width: 100%; height: 100%; object-fit: contain; display: block; }
   .slot .empty-hint { font-size: 22px; opacity: 0; }
   .slot.shake { animation: shakeAnim 0.4s; }
   @keyframes shakeAnim {
@@ -169,7 +169,7 @@
   .word-btn.icon-only { padding: 5px; }
   .word-btn.icon-only .word-thumb {
     width: 54px; height: 54px; font-size: 28px; border: 3px solid #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.25); background: #eef7e3;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25); background: #12a454;
   }
   .word-btn.icon-only .word-thumb video { object-fit: contain; }
   .btn-action {
@@ -446,88 +446,23 @@
     }
   }
 
-  const chromaInstances = {}; // slotId -> { video, stop }
-
-  // Renders a solid-background video onto a canvas with that background made transparent,
-  // by sampling the corner pixels as the key color (works for green/blue/white screens etc).
-  function createChromaVideo(src, onError) {
-    const video = document.createElement('video');
-    video.src = src;
-    video.muted = true; video.loop = true; video.playsInline = true; video.autoplay = true;
-    video.style.display = 'none';
-
-    const canvas = document.createElement('canvas');
-    canvas.className = 'video-slot-media chroma-canvas';
-
-    let keyColor = null;
-    let running = true;
-    let frameCount = 0;
-    const workW = 200;
-
-    function sampleKeyColor(ctx, w, h) {
-      const pts = [[2, 2], [w - 3, 2], [2, h - 3], [w - 3, h - 3]];
-      let r = 0, g = 0, b = 0;
-      pts.forEach(([x, y]) => {
-        const d = ctx.getImageData(x, y, 1, 1).data;
-        r += d[0]; g += d[1]; b += d[2];
-      });
-      return { r: r / 4, g: g / 4, b: b / 4 };
-    }
-
-    video.addEventListener('loadeddata', () => {
-      const ratio = video.videoHeight / video.videoWidth || 1;
-      const w = workW, h = Math.round(workW * ratio);
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      video.play().catch(() => {});
-
-      function draw() {
-        if (!running) return;
-        if (video.readyState >= 2) {
-          ctx.drawImage(video, 0, 0, w, h);
-          if (!keyColor && frameCount === 2) keyColor = sampleKeyColor(ctx, w, h);
-          if (keyColor) {
-            const frame = ctx.getImageData(0, 0, w, h);
-            const d = frame.data;
-            const tol = 55, feather = 28;
-            for (let i = 0; i < d.length; i += 4) {
-              const dr = d[i] - keyColor.r, dg = d[i + 1] - keyColor.g, db = d[i + 2] - keyColor.b;
-              const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-              if (dist < tol) d[i + 3] = 0;
-              else if (dist < tol + feather) d[i + 3] = Math.round(((dist - tol) / feather) * 255);
-            }
-            ctx.putImageData(frame, 0, 0);
-          }
-          frameCount++;
-        }
-        setTimeout(() => requestAnimationFrame(draw), 66); // ~15fps, gentle on the CPU
-      }
-      draw();
-    });
-
-    video.addEventListener('error', () => { if (onError) onError(); });
-
-    document.body.appendChild(video); // kept off-screen but in the DOM so it can decode/play
-    return {
-      canvas,
-      stop() { running = false; video.pause(); video.remove(); }
-    };
-  }
-
   function placeCoreWord(wordId, slotId) {
     const w = coreWords.find(x => x.id === wordId);
     const slotEl = document.getElementById('slot-' + slotId);
     slotEl.innerHTML = '';
 
-    const chroma = createChromaVideo(w.video, () => {
-      console.error('Video failed to load:', w.video);
+    const video = document.createElement('video');
+    video.src = w.video;
+    video.autoplay = true; video.muted = true; video.loop = true; video.playsInline = true;
+    video.className = 'video-slot-media';
+    video.addEventListener('error', () => {
+      console.error('Video failed to load:', w.video, video.error);
       const fallback = document.createElement('span');
       fallback.className = 'fallback-icon';
       fallback.innerText = emojiMap[wordId];
-      chroma.canvas.replaceWith(fallback);
+      video.replaceWith(fallback);
     });
-    chromaInstances[slotId] = chroma;
-    slotEl.appendChild(chroma.canvas);
+    slotEl.appendChild(video);
 
     const speakerBtn = document.createElement('button');
     speakerBtn.className = 'speaker-btn';
@@ -554,8 +489,6 @@
     const wordId = occupant[slotId];
     if (wordId === undefined) return;
     if (tagSlot[slotId] !== undefined) releaseSynFromSlot(slotId);
-
-    if (chromaInstances[slotId]) { chromaInstances[slotId].stop(); delete chromaInstances[slotId]; }
 
     const slotEl = document.getElementById('slot-' + slotId);
     const audioFile = coreWords.find(x => x.id === slotId).audio;
