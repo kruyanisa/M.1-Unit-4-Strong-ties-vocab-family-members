@@ -148,6 +148,8 @@
   .word-btn.syn { border-color: #ffa726; color: #e65100; box-shadow: 0 3px 0 #ef6c00; }
   .word-btn.syn.selected { background: #ffa726; color: #fff; box-shadow: 0 3px 0 #ef6c00; }
 
+  .word-btn.icon-only { padding: 4px; }
+  .word-btn.icon-only .word-thumb { width: 40px; height: 40px; font-size: 22px; }
   .btn-action {
     font-family: 'Sarabun'; background: #43a047; color: #fff; border: none;
     padding: 11px 20px; border-radius: 50px; cursor: pointer; font-weight: 700;
@@ -309,8 +311,10 @@
     const bank1 = document.getElementById('wordbankPart1');
     shuffle(coreWords).forEach(w => {
       const btn = document.createElement('button');
-      btn.className = 'word-btn';
+      btn.className = 'word-btn icon-only';
       btn.id = 'word-' + w.id;
+      btn.setAttribute('aria-label', w.label);
+      btn.title = w.label;
 
       const thumb = document.createElement('span');
       thumb.className = 'word-thumb';
@@ -322,7 +326,6 @@
       thumbVideo.addEventListener('error', () => { thumb.innerText = emojiMap[w.id]; });
       thumb.appendChild(thumbVideo);
       btn.appendChild(thumb);
-      btn.appendChild(document.createTextNode(w.label));
 
       btn.onclick = () => onWordTap(w.id, 'core');
       bank1.appendChild(btn);
