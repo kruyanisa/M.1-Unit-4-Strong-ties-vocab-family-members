@@ -111,6 +111,20 @@
     cursor: pointer; z-index: 5;
   }
   .slot .fallback-icon { font-size: 30px; }
+  .slot.result-correct { box-shadow: 0 0 0 4px #66bb6a inset; }
+  .slot.result-wrong { box-shadow: 0 0 0 4px #ef5350 inset; }
+  .result-badge {
+    position: absolute; top: 3px; right: 3px; z-index: 7;
+    display: flex; align-items: center; gap: 3px;
+    border-radius: 30px; font-size: 10px; font-weight: 800; white-space: nowrap;
+    padding: 3px 7px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .result-badge.ok { background: #66bb6a; color: #fff; }
+  .result-badge.no { background: #ef5350; color: #fff; }
+  .tag-pill.result-correct-pill { background: linear-gradient(0deg, rgba(46,125,50,0.95), rgba(102,187,106,0.85)); }
+  .tag-pill.result-wrong-pill { background: linear-gradient(0deg, rgba(198,40,40,0.95), rgba(239,83,80,0.85)); }
+  #submitBtn { transition: opacity 0.3s; }
+  #submitBtn.disabled { opacity: 0.4; pointer-events: none; }
 
   /* ---------- Word bank ---------- */
   .wordbank-wrap { padding: 6px 10px 10px; flex-shrink: 0; }
@@ -186,7 +200,7 @@
     <div class="progress-label" id="progressLabel">0 / 10</div>
   </div>
 
-  <div class="instruction" id="instructionText">แตะคำศัพท์ด้านล่าง แล้วแตะช่องในต้นไม้ที่ตรงกัน 👇</div>
+  <div class="instruction" id="instructionText">แตะคำศัพท์ด้านล่าง แล้วแตะช่องที่คิดว่าใช่ 👇 (ตอบผิดได้ ไม่เฉลยจนกว่าจะกดส่งคำตอบ)</div>
 
   <div class="tree-stage">
     <div class="tree-frame" id="treeFrame"></div>
@@ -197,6 +211,7 @@
     <div class="wordbank" id="wordbankPart1"></div>
     <div class="wordbank-title" id="bankTitlePart2" style="display:none; margin-top:6px;">คำเรียกลำลอง (จับคู่กับคำในต้นไม้)</div>
     <div class="wordbank" id="wordbankPart2" style="display:none;"></div>
+    <button class="btn-action disabled" id="submitBtn" style="width:100%; margin-top:8px;" onclick="gradeAndFinish()">📩 ส่งคำตอบ</button>
   </div>
 </div>
 
@@ -206,11 +221,13 @@
 
   let student = { name: "", room: "", id: "" };
   let selected = null;     // { id, type: 'core' | 'syn' }
-  let mistakes = 0;
-  let placedCore = 0;
-  let taggedSyn = 0;
+  let locked = false;      // true after answers are submitted and graded
   const TOTAL = 10;
-  const wrongAttempts = {};  // wordId -> number of wrong taps made while answering that word
+
+  const occupant = {};      // slotId -> coreWordId currently placed there
+  const wordLocation = {};  // coreWordId -> slotId
+  const tagSlot = {};       // slotId -> synId currently attached there
+  const synLocation = {};   // synId -> slotId
 
   // Positions match the familyTree.jpg template (percent of tree-frame box)
   const coreWords = [
@@ -336,6 +353,7 @@
   }
 
   function onWordTap(id, type) {
+    if (locked) return;
     document.querySelectorAll('.word-btn').forEach(b => b.classList.remove('selected'));
     if (selected && selected.id === id) { selected = null; return; }
     selected = { id, type };
@@ -347,40 +365,37 @@
   }
 
   function onSlotTap(slotId) {
-    const slotEl = document.getElementById('slot-' + slotId);
+    if (locked) return;
 
-    // No word selected: tapping a filled slot picks it back up so the student can change it
+    // No word selected: tapping a filled slot picks its word back up so the student can change it
     if (!selected) {
-      if (placedIds.has(slotId)) removeCorePlacement(slotId);
+      if (occupant[slotId] !== undefined) releaseCoreFromSlot(slotId);
       return;
     }
 
     if (selected.type === 'core') {
-      if (selected.id === slotId) {
-        correctCorePlacement(slotId);
-      } else {
-        wrongAttempts[selected.id] = (wrongAttempts[selected.id] || 0) + 1;
-        mistakes++;
-        wrongFeedback(slotEl);
-      }
+      const wordId = selected.id;
+      if (occupant[slotId] === wordId) { clearSelection(); return; }
+      if (wordLocation[wordId] !== undefined) releaseCoreFromSlot(wordLocation[wordId]);
+      if (occupant[slotId] !== undefined) releaseCoreFromSlot(slotId);
+      placeCoreWord(wordId, slotId);
     } else {
-      const syn = synonyms.find(x => x.id === selected.id);
-      const alreadyTagged = slotEl.querySelector('.tag-pill') !== null;
-      if (syn.match === slotId && placedIds.has(slotId) && !alreadyTagged) {
-        correctSynPlacement(slotId, syn);
-      } else {
-        wrongAttempts[selected.id] = (wrongAttempts[selected.id] || 0) + 1;
-        mistakes++;
-        wrongFeedback(slotEl);
+      const synId = selected.id;
+      if (occupant[slotId] === undefined) {
+        showToast('ต้องมีคำศัพท์หลักอยู่ในช่องนี้ก่อนนะ');
+        clearSelection();
+        return;
       }
+      if (tagSlot[slotId] === synId) { clearSelection(); return; }
+      if (synLocation[synId] !== undefined) releaseSynFromSlot(synLocation[synId]);
+      if (tagSlot[slotId] !== undefined) releaseSynFromSlot(slotId);
+      placeSynWord(synId, slotId);
     }
   }
 
-  const placedIds = new Set();
-
-  function correctCorePlacement(id) {
-    const w = coreWords.find(x => x.id === id);
-    const slotEl = document.getElementById('slot-' + id);
+  function placeCoreWord(wordId, slotId) {
+    const w = coreWords.find(x => x.id === wordId);
+    const slotEl = document.getElementById('slot-' + slotId);
     slotEl.innerHTML = '';
 
     const video = document.createElement('video');
@@ -391,7 +406,7 @@
       console.error('Video failed to load:', w.video, video.error);
       const fallback = document.createElement('span');
       fallback.className = 'fallback-icon';
-      fallback.innerText = emojiMap[id];
+      fallback.innerText = emojiMap[wordId];
       video.replaceWith(fallback);
     });
     slotEl.appendChild(video);
@@ -405,45 +420,37 @@
     const resetBtn = document.createElement('button');
     resetBtn.className = 'reset-btn';
     resetBtn.innerText = '↺';
-    resetBtn.onclick = (e) => { e.stopPropagation(); removeCorePlacement(id); };
+    resetBtn.onclick = (e) => { e.stopPropagation(); releaseCoreFromSlot(slotId); };
     slotEl.appendChild(resetBtn);
 
-    slotEl.classList.add('flash-correct');
-    setTimeout(() => slotEl.classList.remove('flash-correct'), 500);
-    placedIds.add(id);
-    placedCore++;
-    document.getElementById('word-' + id).classList.add('done');
+    occupant[slotId] = wordId;
+    wordLocation[wordId] = slotId;
+    document.getElementById('word-' + wordId).classList.add('done');
     playAudio(w.audio);
     clearSelection();
     updateProgress();
-    if (placedCore === coreWords.length) revealPart2();
-    checkFinish();
+    if (Object.keys(occupant).length === coreWords.length) revealPart2();
   }
 
-  function removeCorePlacement(id) {
-    const slotEl = document.getElementById('slot-' + id);
+  function releaseCoreFromSlot(slotId) {
+    const wordId = occupant[slotId];
+    if (wordId === undefined) return;
+    if (tagSlot[slotId] !== undefined) releaseSynFromSlot(slotId);
 
-    // If a synonym tag is attached to this slot, release it too
-    const pill = slotEl.querySelector('.tag-pill');
-    if (pill) {
-      const synId = pill.dataset.synId;
-      if (synId) {
-        taggedSyn--;
-        document.getElementById('word-' + synId).classList.remove('done');
-      }
-      pill.remove();
-    }
-
+    const slotEl = document.getElementById('slot-' + slotId);
+    const audioFile = coreWords.find(x => x.id === slotId).audio;
     slotEl.innerHTML = `<span class="empty-hint">＋</span>
-      <button class="speaker-btn" onclick="event.stopPropagation(); playAudio('${coreWords.find(x=>x.id===id).audio}')">🔊</button>`;
-    placedIds.delete(id);
-    placedCore--;
-    document.getElementById('word-' + id).classList.remove('done');
+      <button class="speaker-btn" onclick="event.stopPropagation(); playAudio('${audioFile}')">🔊</button>`;
+
+    delete occupant[slotId];
+    delete wordLocation[wordId];
+    document.getElementById('word-' + wordId).classList.remove('done');
     clearSelection();
     updateProgress();
   }
 
-  function correctSynPlacement(slotId, syn) {
+  function placeSynWord(synId, slotId) {
+    const syn = synonyms.find(x => x.id === synId);
     const slotEl = document.getElementById('slot-' + slotId);
 
     const pill = document.createElement('div');
@@ -454,42 +461,37 @@
     pillEmoji.className = 'pill-emoji';
     pillEmoji.innerText = emojiMap[syn.id];
     const pillLabel = document.createElement('span');
+    pillLabel.className = 'pill-label';
     pillLabel.innerText = syn.label;
     const pillX = document.createElement('span');
     pillX.className = 'pill-x';
     pillX.innerText = '✕';
-    pillX.onclick = (e) => { e.stopPropagation(); removeSynTag(slotId); };
+    pillX.onclick = (e) => { e.stopPropagation(); releaseSynFromSlot(slotId); };
 
     pill.appendChild(pillEmoji);
     pill.appendChild(pillLabel);
     pill.appendChild(pillX);
     slotEl.appendChild(pill);
 
-    slotEl.classList.add('flash-correct');
-    setTimeout(() => slotEl.classList.remove('flash-correct'), 500);
-    taggedSyn++;
-    document.getElementById('word-' + syn.id).classList.add('done');
+    tagSlot[slotId] = synId;
+    synLocation[synId] = slotId;
+    document.getElementById('word-' + synId).classList.add('done');
     playAudio(syn.audio);
     clearSelection();
     updateProgress();
-    checkFinish();
   }
 
-  function removeSynTag(slotId) {
+  function releaseSynFromSlot(slotId) {
+    const synId = tagSlot[slotId];
+    if (synId === undefined) return;
     const slotEl = document.getElementById('slot-' + slotId);
     const pill = slotEl.querySelector('.tag-pill');
-    if (!pill) return;
-    const synId = pill.dataset.synId;
-    pill.remove();
-    taggedSyn--;
+    if (pill) pill.remove();
+    delete tagSlot[slotId];
+    delete synLocation[synId];
     document.getElementById('word-' + synId).classList.remove('done');
     clearSelection();
     updateProgress();
-  }
-
-  function wrongFeedback(slotEl) {
-    slotEl.classList.add('shake', 'flash-wrong');
-    setTimeout(() => slotEl.classList.remove('shake', 'flash-wrong'), 450);
   }
 
   function clearSelection() {
@@ -498,14 +500,18 @@
   }
 
   function updateProgress() {
-    const total = placedCore + taggedSyn;
+    const total = Object.keys(occupant).length + Object.keys(tagSlot).length;
     document.getElementById('progressFill').style.width = (total / TOTAL * 100) + '%';
-    document.getElementById('progressLabel').innerText = total + ' / ' + TOTAL;
+    document.getElementById('progressLabel').innerText = total + ' / ' + TOTAL + ' ทำแล้ว';
+
+    const submitBtn = document.getElementById('submitBtn');
+    if (total === TOTAL) submitBtn.classList.remove('disabled');
+    else submitBtn.classList.add('disabled');
   }
 
   function revealPart2() {
-    showToast('เก่งมาก! 🎉 ต่อไปลองจับคู่ "คำเรียกลำลอง" กันต่อ');
-    document.getElementById('instructionText').innerText = 'แตะคำเรียกลำลอง แล้วแตะช่องต้นไม้ที่ความหมายตรงกัน 👇';
+    showToast('ครบคำศัพท์หลักแล้ว 🎉 ต่อไปลองจับคู่ "คำเรียกลำลอง" กันต่อ');
+    document.getElementById('instructionText').innerText = 'แตะคำเรียกลำลอง แล้วแตะช่องที่คิดว่าตรงกัน 👇 (ยังไม่เฉลย)';
     document.getElementById('bankTitlePart2').style.display = 'block';
     document.getElementById('wordbankPart2').style.display = 'flex';
   }
@@ -517,22 +523,59 @@
     setTimeout(() => t.classList.remove('show'), 2200);
   }
 
-  function checkFinish() {
-    if (placedCore + taggedSyn === TOTAL) {
-      setTimeout(finishGame, 600);
-    }
-  }
+  async function gradeAndFinish() {
+    if (locked) return;
+    if (Object.keys(occupant).length + Object.keys(tagSlot).length < TOTAL) return;
+    locked = true;
+    clearSelection();
+    document.getElementById('submitBtn').classList.add('disabled');
 
-  async function finishGame() {
-    const allIds = [...coreWords.map(w => w.id), ...synonyms.map(w => w.id)];
-    const correctCount = allIds.filter(id => !wrongAttempts[id]).length;
-    const wrongCount = TOTAL - correctCount;
+    let correctCount = 0;
+
+    coreWords.forEach(w => {
+      const slotEl = document.getElementById('slot-' + w.id);
+      const isCorrect = occupant[w.id] === w.id;
+      const resetBtn = slotEl.querySelector('.reset-btn');
+      if (resetBtn) resetBtn.remove();
+
+      const badge = document.createElement('div');
+      if (isCorrect) {
+        correctCount++;
+        badge.className = 'result-badge ok';
+        badge.innerText = '✅';
+      } else {
+        badge.className = 'result-badge no';
+        badge.innerText = '❌ ' + w.label;
+      }
+      slotEl.appendChild(badge);
+      slotEl.classList.add(isCorrect ? 'result-correct' : 'result-wrong');
+    });
+
+    synonyms.forEach(syn => {
+      const isCorrect = synLocation[syn.id] === syn.match;
+      const slotId = synLocation[syn.id];
+      const slotEl = document.getElementById('slot-' + slotId);
+      const pill = slotEl ? slotEl.querySelector('.tag-pill') : null;
+      if (isCorrect) correctCount++;
+      if (pill) {
+        pill.classList.add(isCorrect ? 'result-correct-pill' : 'result-wrong-pill');
+        if (!isCorrect) {
+          const correctLabel = coreWords.find(w => w.id === syn.match).label;
+          const label = pill.querySelector('.pill-label');
+          if (label) label.innerText = syn.label + ' → ที่ถูกคือ ' + correctLabel;
+        }
+        const x = pill.querySelector('.pill-x');
+        if (x) x.remove();
+      }
+    });
+
     const score = correctCount;
+    const wrongCount = TOTAL - correctCount;
 
     document.getElementById('scoreValue').innerText = `${score} / ${TOTAL}`;
     document.getElementById('mistakeSummary').innerText = wrongCount === 0
-      ? '🌟 ตอบถูกทุกข้อตั้งแต่ครั้งแรกเลย เก่งมาก!'
-      : `ตอบถูก ${correctCount} ข้อ ตอบผิด ${wrongCount} ข้อ ลองเล่นใหม่เพื่อทำให้ดีขึ้นได้นะ`;
+      ? '🌟 ตอบถูกทุกข้อเลย เก่งมาก!'
+      : `ตอบถูก ${correctCount} ข้อ ตอบผิด ${wrongCount} ข้อ ดูตรงกรอบสีแดงในต้นไม้เพื่อดูเฉลย แล้วลองเล่นใหม่ได้นะ`;
     document.getElementById('scoreModal').classList.add('active');
 
     const payload = {
