@@ -73,8 +73,9 @@
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; transition: transform 0.15s;
   }
+  .slot { background: #f4ecd8; }
   .slot.selectable:active { transform: scale(0.96); }
-  .slot video { width: 100%; height: 100%; object-fit: cover; }
+  .slot video { width: 100%; height: 100%; object-fit: contain; background: #f4ecd8; }
   .slot .empty-hint { font-size: 22px; opacity: 0.35; }
   .slot.shake { animation: shakeAnim 0.4s; }
   @keyframes shakeAnim {
@@ -92,12 +93,17 @@
     display: flex; align-items: center; justify-content: center; font-size: 12px;
     cursor: pointer; z-index: 5;
   }
-  .slot .tag-pill {
-    position: absolute; top: 3px; left: 3px; background: #ffeb3b; color: #5d4037;
-    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
-    z-index: 5; box-shadow: 0 1px 3px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 4px;
+  .tag-pill {
+    position: absolute; z-index: 6; display: flex; align-items: center; gap: 5px;
+    background: linear-gradient(135deg, #ffd54f, #ffb300); color: #5d3c00;
+    font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 700;
+    padding: 5px 10px; border-radius: 30px; white-space: nowrap;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.28); border: 2px solid #fff8e1;
   }
-  .slot .tag-pill .pill-x { cursor: pointer; font-weight: 800; opacity: 0.7; }
+  .tag-pill .pill-emoji { font-size: 14px; }
+  .tag-pill .pill-x {
+    cursor: pointer; font-weight: 800; opacity: 0.65; margin-left: 2px; font-size: 11px;
+  }
   .slot .reset-btn {
     position: absolute; top: 3px; right: 3px; width: 22px; height: 22px;
     background: rgba(255,255,255,0.9); border-radius: 50%; border: none;
@@ -355,7 +361,7 @@
       }
     } else {
       const syn = synonyms.find(x => x.id === selected.id);
-      const alreadyTagged = slotEl.querySelector('.tag-pill') !== null;
+      const alreadyTagged = document.getElementById('pill-' + slotId) !== null;
       if (syn.match === slotId && placedIds.has(slotId) && !alreadyTagged) {
         correctSynPlacement(slotId, syn);
       } else {
@@ -411,7 +417,7 @@
     const slotEl = document.getElementById('slot-' + id);
 
     // If a synonym tag is attached to this slot, release it too
-    const pill = slotEl.querySelector('.tag-pill');
+    const pill = document.getElementById('pill-' + id);
     if (pill) {
       const synId = pill.dataset.synId;
       if (synId) {
@@ -431,12 +437,35 @@
   }
 
   function correctSynPlacement(slotId, syn) {
-    const slotEl = document.getElementById('slot-' + slotId);
+    const w = coreWords.find(x => x.id === slotId);
+    const frame = document.getElementById('treeFrame');
+    const isLeftColumn = w.pos.left < 50;
+
     const pill = document.createElement('div');
     pill.className = 'tag-pill';
+    pill.id = 'pill-' + slotId;
     pill.dataset.synId = syn.id;
-    pill.innerHTML = `<span>= ${syn.label}</span><span class="pill-x" onclick="event.stopPropagation(); removeSynTag('${slotId}')">✕</span>`;
-    slotEl.appendChild(pill);
+    pill.style.top = (w.pos.top + w.pos.height / 2) + '%';
+    pill.style.transform = 'translateY(-50%)';
+    if (isLeftColumn) { pill.style.right = (100 - w.pos.left) + '%'; }
+    else { pill.style.left = (w.pos.left + w.pos.width) + '%'; }
+
+    const pillEmoji = document.createElement('span');
+    pillEmoji.className = 'pill-emoji';
+    pillEmoji.innerText = emojiMap[syn.id];
+    const pillLabel = document.createElement('span');
+    pillLabel.innerText = syn.label;
+    const pillX = document.createElement('span');
+    pillX.className = 'pill-x';
+    pillX.innerText = '✕';
+    pillX.onclick = (e) => { e.stopPropagation(); removeSynTag(slotId); };
+
+    pill.appendChild(pillEmoji);
+    pill.appendChild(pillLabel);
+    pill.appendChild(pillX);
+    frame.appendChild(pill);
+
+    const slotEl = document.getElementById('slot-' + slotId);
     slotEl.classList.add('flash-correct');
     setTimeout(() => slotEl.classList.remove('flash-correct'), 500);
     taggedSyn++;
@@ -448,8 +477,7 @@
   }
 
   function removeSynTag(slotId) {
-    const slotEl = document.getElementById('slot-' + slotId);
-    const pill = slotEl.querySelector('.tag-pill');
+    const pill = document.getElementById('pill-' + slotId);
     if (!pill) return;
     const synId = pill.dataset.synId;
     pill.remove();
