@@ -67,6 +67,7 @@
     font-size: 11.5px; font-weight: 700; color: #e65100; text-align: center;
     padding: 5px 10px; margin: 5px 6px 0; border-radius: 10px;
     background: rgba(255,243,224,0.92); backdrop-filter: blur(4px);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
   .bottom-overlay {
@@ -86,6 +87,7 @@
     border-radius: 14px; border: 3px solid rgba(255,255,255,0.85);
     box-shadow: 0 3px 10px rgba(0,0,0,0.3);
   }
+  canvas.video-slot-media { width: 100%; height: 100%; object-fit: contain; display: block; }
   .slot .empty-hint { font-size: 22px; opacity: 0; }
   .slot.shake { animation: shakeAnim 0.4s; }
   @keyframes shakeAnim {
@@ -138,18 +140,23 @@
 
   /* ---------- Word bank ---------- */
   .wordbank-wrap { flex-shrink: 0; }
-  .wordbank-title { font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); margin-bottom: 4px; text-align: center; }
-  .wordbank { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .wordbank-title { font-size: 10.5px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); margin-bottom: 3px; text-align: center; }
+  .wordbank {
+    display: flex; flex-wrap: nowrap; gap: 8px; justify-content: flex-start;
+    overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    padding: 2px 4px 4px;
+  }
+  .wordbank::-webkit-scrollbar { display: none; }
   .word-btn {
     font-family: 'Poppins', sans-serif; font-weight: 600; font-size: 13px;
     padding: 5px 14px 5px 5px; border-radius: 50px; border: none; cursor: pointer;
     background: #fff; color: #33691e; border: 2px solid #7cb342;
     box-shadow: 0 3px 0 #558b2f; transition: 0.1s;
-    display: inline-flex; align-items: center; gap: 6px;
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
   }
   .word-thumb {
     width: 30px; height: 30px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
-    background: #e8f5e9; display: flex; align-items: center; justify-content: center; font-size: 15px;
+    background: #eef7e3; display: flex; align-items: center; justify-content: center; font-size: 15px;
     border: 2px solid #a5d6a7;
   }
   .word-thumb video { width: 100%; height: 100%; object-fit: cover; }
@@ -160,7 +167,11 @@
   .word-btn.syn.selected { background: #ffa726; color: #fff; box-shadow: 0 3px 0 #ef6c00; }
 
   .word-btn.icon-only { padding: 5px; }
-  .word-btn.icon-only .word-thumb { width: 50px; height: 50px; font-size: 26px; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+  .word-btn.icon-only .word-thumb {
+    width: 54px; height: 54px; font-size: 28px; border: 3px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25); background: #eef7e3;
+  }
+  .word-btn.icon-only .word-thumb video { object-fit: contain; }
   .btn-action {
     font-family: 'Sarabun'; background: #43a047; color: #fff; border: none;
     padding: 11px 20px; border-radius: 50px; cursor: pointer; font-weight: 700;
@@ -216,7 +227,7 @@
         <div class="progress-label" id="progressLabel">0 / 10</div>
       </div>
     </div>
-    <div class="instruction" id="instructionText">แตะคำศัพท์ด้านล่าง แล้วแตะช่องที่คิดว่าใช่ 👇 (ตอบผิดได้ ไม่เฉลยจนกว่าจะกดส่งคำตอบ)</div>
+    <div class="instruction" id="instructionText">แตะคำศัพท์ด้านล่าง แล้วแตะ➕ที่ช่องที่คิดว่าใช่</div>
   </div>
 
   <div class="slots-layer" id="slotsLayer"></div>
@@ -435,23 +446,88 @@
     }
   }
 
+  const chromaInstances = {}; // slotId -> { video, stop }
+
+  // Renders a solid-background video onto a canvas with that background made transparent,
+  // by sampling the corner pixels as the key color (works for green/blue/white screens etc).
+  function createChromaVideo(src, onError) {
+    const video = document.createElement('video');
+    video.src = src;
+    video.muted = true; video.loop = true; video.playsInline = true; video.autoplay = true;
+    video.style.display = 'none';
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'video-slot-media chroma-canvas';
+
+    let keyColor = null;
+    let running = true;
+    let frameCount = 0;
+    const workW = 200;
+
+    function sampleKeyColor(ctx, w, h) {
+      const pts = [[2, 2], [w - 3, 2], [2, h - 3], [w - 3, h - 3]];
+      let r = 0, g = 0, b = 0;
+      pts.forEach(([x, y]) => {
+        const d = ctx.getImageData(x, y, 1, 1).data;
+        r += d[0]; g += d[1]; b += d[2];
+      });
+      return { r: r / 4, g: g / 4, b: b / 4 };
+    }
+
+    video.addEventListener('loadeddata', () => {
+      const ratio = video.videoHeight / video.videoWidth || 1;
+      const w = workW, h = Math.round(workW * ratio);
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      video.play().catch(() => {});
+
+      function draw() {
+        if (!running) return;
+        if (video.readyState >= 2) {
+          ctx.drawImage(video, 0, 0, w, h);
+          if (!keyColor && frameCount === 2) keyColor = sampleKeyColor(ctx, w, h);
+          if (keyColor) {
+            const frame = ctx.getImageData(0, 0, w, h);
+            const d = frame.data;
+            const tol = 55, feather = 28;
+            for (let i = 0; i < d.length; i += 4) {
+              const dr = d[i] - keyColor.r, dg = d[i + 1] - keyColor.g, db = d[i + 2] - keyColor.b;
+              const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+              if (dist < tol) d[i + 3] = 0;
+              else if (dist < tol + feather) d[i + 3] = Math.round(((dist - tol) / feather) * 255);
+            }
+            ctx.putImageData(frame, 0, 0);
+          }
+          frameCount++;
+        }
+        setTimeout(() => requestAnimationFrame(draw), 66); // ~15fps, gentle on the CPU
+      }
+      draw();
+    });
+
+    video.addEventListener('error', () => { if (onError) onError(); });
+
+    document.body.appendChild(video); // kept off-screen but in the DOM so it can decode/play
+    return {
+      canvas,
+      stop() { running = false; video.pause(); video.remove(); }
+    };
+  }
+
   function placeCoreWord(wordId, slotId) {
     const w = coreWords.find(x => x.id === wordId);
     const slotEl = document.getElementById('slot-' + slotId);
     slotEl.innerHTML = '';
 
-    const video = document.createElement('video');
-    video.src = w.video;
-    video.autoplay = true; video.muted = true; video.loop = true; video.playsInline = true;
-    video.className = 'video-slot-media';
-    video.addEventListener('error', () => {
-      console.error('Video failed to load:', w.video, video.error);
+    const chroma = createChromaVideo(w.video, () => {
+      console.error('Video failed to load:', w.video);
       const fallback = document.createElement('span');
       fallback.className = 'fallback-icon';
       fallback.innerText = emojiMap[wordId];
-      video.replaceWith(fallback);
+      chroma.canvas.replaceWith(fallback);
     });
-    slotEl.appendChild(video);
+    chromaInstances[slotId] = chroma;
+    slotEl.appendChild(chroma.canvas);
 
     const speakerBtn = document.createElement('button');
     speakerBtn.className = 'speaker-btn';
@@ -478,6 +554,8 @@
     const wordId = occupant[slotId];
     if (wordId === undefined) return;
     if (tagSlot[slotId] !== undefined) releaseSynFromSlot(slotId);
+
+    if (chromaInstances[slotId]) { chromaInstances[slotId].stop(); delete chromaInstances[slotId]; }
 
     const slotEl = document.getElementById('slot-' + slotId);
     const audioFile = coreWords.find(x => x.id === slotId).audio;
@@ -553,7 +631,7 @@
 
   function revealPart2() {
     showToast('ครบคำศัพท์หลักแล้ว 🎉 ต่อไปลองจับคู่ "คำเรียกลำลอง" กันต่อ');
-    document.getElementById('instructionText').innerText = 'แตะคำเรียกลำลอง แล้วแตะช่องที่คิดว่าตรงกัน 👇 (ยังไม่เฉลย)';
+    document.getElementById('instructionText').innerText = 'แตะคำเรียกลำลอง แล้วแตะ➕ที่ช่องที่คิดว่าตรงกัน';
     document.getElementById('bankTitlePart2').style.display = 'block';
     document.getElementById('wordbankPart2').style.display = 'flex';
   }
