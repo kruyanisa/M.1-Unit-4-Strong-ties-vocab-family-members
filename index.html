@@ -88,21 +88,21 @@
   .slot.flash-wrong { box-shadow: 0 0 0 4px #ef5350 inset; }
   .slot.flash-correct { box-shadow: 0 0 0 4px #66bb6a inset; }
   .slot .speaker-btn {
-    position: absolute; bottom: 3px; right: 3px; width: 22px; height: 22px;
+    position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
     background: rgba(255,255,255,0.9); border-radius: 50%; border: none;
     display: flex; align-items: center; justify-content: center; font-size: 12px;
     cursor: pointer; z-index: 5;
   }
   .tag-pill {
-    position: absolute; z-index: 6; display: flex; align-items: center; gap: 5px;
-    background: linear-gradient(135deg, #ffd54f, #ffb300); color: #5d3c00;
-    font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 700;
-    padding: 5px 10px; border-radius: 30px; white-space: nowrap;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.28); border: 2px solid #fff8e1;
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    background: linear-gradient(0deg, rgba(93,60,0,0.92), rgba(93,60,0,0.78));
+    color: #fff8e1; font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 700;
+    padding: 4px 4px; white-space: nowrap;
   }
-  .tag-pill .pill-emoji { font-size: 14px; }
+  .tag-pill .pill-emoji { font-size: 13px; }
   .tag-pill .pill-x {
-    cursor: pointer; font-weight: 800; opacity: 0.65; margin-left: 2px; font-size: 11px;
+    cursor: pointer; font-weight: 800; opacity: 0.75; margin-left: 3px; font-size: 11px;
   }
   .slot .reset-btn {
     position: absolute; top: 3px; right: 3px; width: 22px; height: 22px;
@@ -209,6 +209,7 @@
   let placedCore = 0;
   let taggedSyn = 0;
   const TOTAL = 10;
+  const wrongAttempts = {};  // wordId -> number of wrong taps made while answering that word
 
   // Positions match the familyTree.jpg template (percent of tree-frame box)
   const coreWords = [
@@ -357,14 +358,18 @@
       if (selected.id === slotId) {
         correctCorePlacement(slotId);
       } else {
+        wrongAttempts[selected.id] = (wrongAttempts[selected.id] || 0) + 1;
+        mistakes++;
         wrongFeedback(slotEl);
       }
     } else {
       const syn = synonyms.find(x => x.id === selected.id);
-      const alreadyTagged = document.getElementById('pill-' + slotId) !== null;
+      const alreadyTagged = slotEl.querySelector('.tag-pill') !== null;
       if (syn.match === slotId && placedIds.has(slotId) && !alreadyTagged) {
         correctSynPlacement(slotId, syn);
       } else {
+        wrongAttempts[selected.id] = (wrongAttempts[selected.id] || 0) + 1;
+        mistakes++;
         wrongFeedback(slotEl);
       }
     }
@@ -382,6 +387,7 @@
     video.autoplay = true; video.muted = true; video.loop = true; video.playsInline = true;
     video.className = 'video-slot-media';
     video.addEventListener('error', () => {
+      console.error('Video failed to load:', w.video, video.error);
       const fallback = document.createElement('span');
       fallback.className = 'fallback-icon';
       fallback.innerText = emojiMap[id];
@@ -417,7 +423,7 @@
     const slotEl = document.getElementById('slot-' + id);
 
     // If a synonym tag is attached to this slot, release it too
-    const pill = document.getElementById('pill-' + id);
+    const pill = slotEl.querySelector('.tag-pill');
     if (pill) {
       const synId = pill.dataset.synId;
       if (synId) {
@@ -437,18 +443,11 @@
   }
 
   function correctSynPlacement(slotId, syn) {
-    const w = coreWords.find(x => x.id === slotId);
-    const frame = document.getElementById('treeFrame');
-    const isLeftColumn = w.pos.left < 50;
+    const slotEl = document.getElementById('slot-' + slotId);
 
     const pill = document.createElement('div');
     pill.className = 'tag-pill';
-    pill.id = 'pill-' + slotId;
     pill.dataset.synId = syn.id;
-    pill.style.top = (w.pos.top + w.pos.height / 2) + '%';
-    pill.style.transform = 'translateY(-50%)';
-    if (isLeftColumn) { pill.style.right = (100 - w.pos.left) + '%'; }
-    else { pill.style.left = (w.pos.left + w.pos.width) + '%'; }
 
     const pillEmoji = document.createElement('span');
     pillEmoji.className = 'pill-emoji';
@@ -463,9 +462,8 @@
     pill.appendChild(pillEmoji);
     pill.appendChild(pillLabel);
     pill.appendChild(pillX);
-    frame.appendChild(pill);
+    slotEl.appendChild(pill);
 
-    const slotEl = document.getElementById('slot-' + slotId);
     slotEl.classList.add('flash-correct');
     setTimeout(() => slotEl.classList.remove('flash-correct'), 500);
     taggedSyn++;
@@ -477,7 +475,8 @@
   }
 
   function removeSynTag(slotId) {
-    const pill = document.getElementById('pill-' + slotId);
+    const slotEl = document.getElementById('slot-' + slotId);
+    const pill = slotEl.querySelector('.tag-pill');
     if (!pill) return;
     const synId = pill.dataset.synId;
     pill.remove();
@@ -488,7 +487,6 @@
   }
 
   function wrongFeedback(slotEl) {
-    mistakes++;
     slotEl.classList.add('shake', 'flash-wrong');
     setTimeout(() => slotEl.classList.remove('shake', 'flash-wrong'), 450);
   }
@@ -525,7 +523,8 @@
   }
 
   async function finishGame() {
-    const score = TOTAL; // mastery mode: all 10 completed
+    const allIds = [...coreWords.map(w => w.id), ...synonyms.map(w => w.id)];
+    const score = allIds.filter(id => !wrongAttempts[id]).length; // point only if answered correctly, no wrong attempts
     document.getElementById('scoreValue').innerText = `${score} / ${TOTAL}`;
     document.getElementById('scoreModal').classList.add('active');
 
