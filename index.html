@@ -10,9 +10,8 @@
   html, body {
     margin: 0; padding: 0; height: 100%; overflow: hidden;
     font-family: 'Sarabun', sans-serif;
-    background: linear-gradient(135deg, #d9f2e6, #eaf7d9);
+    background: #274b21;
   }
-  body { display: flex; flex-direction: column; align-items: center; padding: 8px; }
 
   /* ---------- Modals ---------- */
   .modal-overlay {
@@ -32,51 +31,62 @@
     border-radius: 12px; font-family: 'Sarabun'; text-align: center; font-size: 15px;
   }
 
-  /* ---------- App shell ---------- */
-  .app-container {
-    width: 100%; max-width: 460px; height: 100%;
-    background: #ffffff; border-radius: 26px; overflow: hidden;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.15); border: 3px solid #a5d6a7;
-    display: flex; flex-direction: column;
+  /* ---------- Full-screen stage ---------- */
+  .stage {
+    position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow: hidden;
+    background: #8fd0e8;
+  }
+  .bg-img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: center; z-index: 0; user-select: none; pointer-events: none;
+  }
+  .slots-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+
+  .top-overlay {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    padding: max(8px, env(safe-area-inset-top)) 8px 0;
+  }
+  .glass-card {
+    background: rgba(255,255,255,0.88); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    border-radius: 16px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); border: 2px solid rgba(255,255,255,0.6);
   }
   .header {
-    background: linear-gradient(90deg, #66bb6a, #43a047);
-    color: #fff; padding: 10px 8px; text-align: center;
-    font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 15px;
+    background: linear-gradient(90deg, rgba(102,187,106,0.95), rgba(67,160,71,0.95));
+    color: #fff; padding: 8px 8px; text-align: center;
+    font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 14px;
+    border-radius: 14px 14px 0 0;
   }
-  .user-info { background: #f1f8e9; font-size: 11px; font-weight: 700; color: #33691e; padding: 4px; text-align: center; border-bottom: 1px solid #c5e1a5; }
+  .user-info { font-size: 10.5px; font-weight: 700; color: #33691e; padding: 4px; text-align: center; }
 
-  .progress-wrap { padding: 6px 12px 0; }
-  .progress-bar-bg { width: 100%; height: 10px; background: #e8f5e9; border-radius: 10px; overflow: hidden; border: 1px solid #c5e1a5; }
+  .progress-wrap { padding: 4px 10px 0; }
+  .progress-bar-bg { width: 100%; height: 9px; background: #e8f5e9; border-radius: 10px; overflow: hidden; border: 1px solid #c5e1a5; }
   .progress-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg,#9ccc65,#43a047); transition: width 0.35s ease; }
-  .progress-label { font-size: 11px; color: #558b2f; font-weight: 700; text-align: center; margin-top: 2px; }
+  .progress-label { font-size: 10.5px; color: #558b2f; font-weight: 700; text-align: center; margin: 1px 0 5px; }
 
   .instruction {
-    font-size: 12.5px; font-weight: 700; color: #e65100; text-align: center;
-    padding: 4px 10px; background: #fff3e0; margin: 4px 8px 0; border-radius: 10px;
+    font-size: 11.5px; font-weight: 700; color: #e65100; text-align: center;
+    padding: 5px 10px; margin: 5px 6px 0; border-radius: 10px;
+    background: rgba(255,243,224,0.92); backdrop-filter: blur(4px);
   }
 
-  /* ---------- Tree area ---------- */
-  .tree-stage {
-    position: relative; width: 100%; flex: 1 1 auto; min-height: 0;
-    margin-top: 4px; display: flex; align-items: center; justify-content: center;
-    padding: 2px 6px;
-  }
-  .tree-frame {
-    position: relative; height: 100%; max-height: 100%; aspect-ratio: 9 / 16;
-    background-image: url('familyTree.jpg');
-    background-size: cover; background-position: center;
-    border-radius: 16px; overflow: hidden;
+  .bottom-overlay {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    background: linear-gradient(0deg, rgba(20,45,10,0.6) 30%, rgba(20,45,10,0.15) 80%, rgba(20,45,10,0) 100%);
   }
   .slot {
-    position: absolute; border-radius: 10px; overflow: hidden;
+    position: absolute; border-radius: 18px; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; transition: transform 0.15s;
+    cursor: pointer; transition: transform 0.15s; pointer-events: auto;
+    background: transparent;
   }
-  .slot { background: #f4ecd8; }
   .slot.selectable:active { transform: scale(0.96); }
-  .slot video { width: 100%; height: 100%; object-fit: contain; background: #f4ecd8; }
-  .slot .empty-hint { font-size: 22px; opacity: 0.35; }
+  .slot video { width: 100%; height: 100%; object-fit: contain; background: transparent; }
+  .video-slot-media {
+    border-radius: 14px; border: 3px solid rgba(255,255,255,0.85);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+  }
+  .slot .empty-hint { font-size: 22px; opacity: 0; }
   .slot.shake { animation: shakeAnim 0.4s; }
   @keyframes shakeAnim {
     0%,100% { transform: translateX(0); }
@@ -127,8 +137,8 @@
   #submitBtn.disabled { opacity: 0.4; pointer-events: none; }
 
   /* ---------- Word bank ---------- */
-  .wordbank-wrap { padding: 6px 10px 10px; flex-shrink: 0; }
-  .wordbank-title { font-size: 11px; font-weight: 700; color: #33691e; margin-bottom: 4px; text-align: center; }
+  .wordbank-wrap { flex-shrink: 0; }
+  .wordbank-title { font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); margin-bottom: 4px; text-align: center; }
   .wordbank { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
   .word-btn {
     font-family: 'Poppins', sans-serif; font-weight: 600; font-size: 13px;
@@ -138,8 +148,9 @@
     display: inline-flex; align-items: center; gap: 6px;
   }
   .word-thumb {
-    width: 26px; height: 26px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+    width: 30px; height: 30px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
     background: #e8f5e9; display: flex; align-items: center; justify-content: center; font-size: 15px;
+    border: 2px solid #a5d6a7;
   }
   .word-thumb video { width: 100%; height: 100%; object-fit: cover; }
   .word-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #558b2f; }
@@ -148,8 +159,8 @@
   .word-btn.syn { border-color: #ffa726; color: #e65100; box-shadow: 0 3px 0 #ef6c00; }
   .word-btn.syn.selected { background: #ffa726; color: #fff; box-shadow: 0 3px 0 #ef6c00; }
 
-  .word-btn.icon-only { padding: 4px; }
-  .word-btn.icon-only .word-thumb { width: 40px; height: 40px; font-size: 22px; }
+  .word-btn.icon-only { padding: 5px; }
+  .word-btn.icon-only .word-thumb { width: 50px; height: 50px; font-size: 26px; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
   .btn-action {
     font-family: 'Sarabun'; background: #43a047; color: #fff; border: none;
     padding: 11px 20px; border-radius: 50px; cursor: pointer; font-weight: 700;
@@ -193,27 +204,31 @@
 
 <div class="toast" id="toast"></div>
 
-<div class="app-container" id="mainApp" style="display:none;">
-  <div class="header">🌳 Unit 4: Strong Ties - Family Members</div>
-  <div class="user-info" id="userInfo">Player: -</div>
+<div class="stage" id="mainApp" style="display:none;">
+  <img class="bg-img" id="bgImage" src="familyTree.jpg" alt="Family Tree">
 
-  <div class="progress-wrap">
-    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
-    <div class="progress-label" id="progressLabel">0 / 10</div>
+  <div class="top-overlay">
+    <div class="glass-card">
+      <div class="header">🌳 Unit 4: Strong Ties - Family Members</div>
+      <div class="user-info" id="userInfo">Player: -</div>
+      <div class="progress-wrap">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+        <div class="progress-label" id="progressLabel">0 / 10</div>
+      </div>
+    </div>
+    <div class="instruction" id="instructionText">แตะคำศัพท์ด้านล่าง แล้วแตะช่องที่คิดว่าใช่ 👇 (ตอบผิดได้ ไม่เฉลยจนกว่าจะกดส่งคำตอบ)</div>
   </div>
 
-  <div class="instruction" id="instructionText">แตะคำศัพท์ด้านล่าง แล้วแตะช่องที่คิดว่าใช่ 👇 (ตอบผิดได้ ไม่เฉลยจนกว่าจะกดส่งคำตอบ)</div>
+  <div class="slots-layer" id="slotsLayer"></div>
 
-  <div class="tree-stage">
-    <div class="tree-frame" id="treeFrame"></div>
-  </div>
-
-  <div class="wordbank-wrap">
-    <div class="wordbank-title" id="bankTitlePart1">คำศัพท์หลัก</div>
-    <div class="wordbank" id="wordbankPart1"></div>
-    <div class="wordbank-title" id="bankTitlePart2" style="display:none; margin-top:6px;">คำเรียกลำลอง (จับคู่กับคำในต้นไม้)</div>
-    <div class="wordbank" id="wordbankPart2" style="display:none;"></div>
-    <button class="btn-action disabled" id="submitBtn" style="width:100%; margin-top:8px;" onclick="gradeAndFinish()">📩 ส่งคำตอบ</button>
+  <div class="bottom-overlay">
+    <div class="wordbank-wrap">
+      <div class="wordbank-title" id="bankTitlePart1">คำศัพท์หลัก</div>
+      <div class="wordbank" id="wordbankPart1"></div>
+      <div class="wordbank-title" id="bankTitlePart2" style="display:none; margin-top:6px;">คำเรียกลำลอง (จับคู่กับคำในต้นไม้)</div>
+      <div class="wordbank" id="wordbankPart2" style="display:none;"></div>
+      <button class="btn-action disabled" id="submitBtn" style="width:100%; margin-top:8px;" onclick="gradeAndFinish()">📩 ส่งคำตอบ</button>
+    </div>
   </div>
 </div>
 
@@ -231,14 +246,14 @@
   const tagSlot = {};       // slotId -> synId currently attached there
   const synLocation = {};   // synId -> slotId
 
-  // Positions match the familyTree.jpg template (percent of tree-frame box)
+  // Positions measured directly from familyTree.jpg (1080x2400), in percent of the image's own dimensions
   const coreWords = [
-    { id:'grandfather', label:'Grandfather', video:'grandfather.mp4', audio:'grandfather.mp3', pos:{left:14.5,top:15.5,width:31,height:14.5} },
-    { id:'grandmother', label:'Grandmother', video:'grandmother.mp4', audio:'grandmother.mp3', pos:{left:54.5,top:15.5,width:31,height:14.5} },
-    { id:'father',      label:'Father',      video:'father.mp4',      audio:'father.mp3',      pos:{left:14.5,top:42.0,width:31,height:14.5} },
-    { id:'mother',      label:'Mother',      video:'mother.mp4',      audio:'mother.mp3',      pos:{left:54.5,top:42.0,width:31,height:14.5} },
-    { id:'brother',     label:'Brother',     video:'brother.mp4',     audio:'brother.mp3',     pos:{left:14.5,top:68.5,width:31,height:14.5} },
-    { id:'sister',      label:'Sister',      video:'sister.mp4',      audio:'sister.mp3',      pos:{left:54.5,top:68.5,width:31,height:14.5} }
+    { id:'grandfather', label:'Grandfather', video:'grandfather.mp4', audio:'grandfather.mp3', pos:{left:14.0,top:26.6,width:32.9,height:12.5} },
+    { id:'grandmother', label:'Grandmother', video:'grandmother.mp4', audio:'grandmother.mp3', pos:{left:51.4,top:26.6,width:34.3,height:12.5} },
+    { id:'father',      label:'Father',      video:'father.mp4',      audio:'father.mp3',      pos:{left:14.2,top:46.4,width:32.5,height:12.3} },
+    { id:'mother',      label:'Mother',      video:'mother.mp4',      audio:'mother.mp3',      pos:{left:53.0,top:46.4,width:32.5,height:12.2} },
+    { id:'brother',     label:'Brother',     video:'brother.mp4',     audio:'brother.mp3',     pos:{left:14.1,top:64.0,width:32.5,height:13.5} },
+    { id:'sister',      label:'Sister',      video:'sister.mp4',      audio:'sister.mp3',      pos:{left:53.3,top:65.0,width:32.0,height:12.4} }
   ];
 
   const synonyms = [
@@ -261,6 +276,33 @@
     }
     return a;
   }
+
+  // Positions the invisible tap-zones exactly on top of the artwork's boxes,
+  // matching how the browser crops the background image with object-fit:cover.
+  function layoutSlots() {
+    const img = document.getElementById('bgImage');
+    const stage = document.getElementById('mainApp');
+    const nw = img.naturalWidth, nh = img.naturalHeight;
+    if (!nw || !nh) return;
+
+    const cw = stage.clientWidth, ch = stage.clientHeight;
+    const scale = Math.max(cw / nw, ch / nh);
+    const dispW = nw * scale, dispH = nh * scale;
+    const offsetX = (cw - dispW) / 2, offsetY = (ch - dispH) / 2;
+
+    coreWords.forEach(w => {
+      const el = document.getElementById('slot-' + w.id);
+      if (!el) return;
+      el.style.left = (offsetX + (w.pos.left / 100) * dispW) + 'px';
+      el.style.top = (offsetY + (w.pos.top / 100) * dispH) + 'px';
+      el.style.width = ((w.pos.width / 100) * dispW) + 'px';
+      el.style.height = ((w.pos.height / 100) * dispH) + 'px';
+    });
+  }
+
+  window.addEventListener('resize', layoutSlots);
+  window.addEventListener('orientationchange', layoutSlots);
+  document.getElementById('bgImage').addEventListener('load', layoutSlots);
 
   window.onload = () => {
     if (localStorage.getItem('ft_name')) {
@@ -288,24 +330,21 @@
     student = { name: n, room: r, id: i };
     document.getElementById('userInfo').innerText = `Player: ${n} | ${r} | ID: ${i}`;
     document.getElementById('loginModal').classList.remove('active');
-    document.getElementById('mainApp').style.display = 'flex';
+    document.getElementById('mainApp').style.display = 'block';
     buildGame();
+    layoutSlots();
   }
 
   function buildGame() {
-    const frame = document.getElementById('treeFrame');
+    const layer = document.getElementById('slotsLayer');
     coreWords.forEach(w => {
       const slot = document.createElement('div');
       slot.className = 'slot selectable';
       slot.id = 'slot-' + w.id;
-      slot.style.left = w.pos.left + '%';
-      slot.style.top = w.pos.top + '%';
-      slot.style.width = w.pos.width + '%';
-      slot.style.height = w.pos.height + '%';
       slot.innerHTML = `<span class="empty-hint">＋</span>
         <button class="speaker-btn" onclick="event.stopPropagation(); playAudio('${w.audio}')">🔊</button>`;
       slot.addEventListener('click', () => onSlotTap(w.id));
-      frame.appendChild(slot);
+      layer.appendChild(slot);
     });
 
     const bank1 = document.getElementById('wordbankPart1');
