@@ -31,10 +31,17 @@
     border-radius: 12px; font-family: 'Sarabun'; text-align: center; font-size: 15px;
   }
 
-  /* ---------- Full-screen stage ---------- */
+  /* ---------- Responsive stage: always shows the full image, letterboxed on wide/short screens ---------- */
   .stage {
     position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow: hidden;
-    background: #8fd0e8;
+    background: #16301c;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .game-frame {
+    position: relative; overflow: hidden;
+    width: min(100vw, calc(100dvh * 9 / 20));
+    height: min(100dvh, calc(100vw * 20 / 9));
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
   }
   .bg-img {
     position: absolute; inset: 0; width: 100%; height: 100%;
@@ -82,11 +89,11 @@
     background: transparent;
   }
   .slot.selectable:active { transform: scale(0.96); }
-  .slot video { width: 100%; height: 100%; object-fit: contain; background: #12a454; }
+  .slot video { width: 100%; height: 100%; object-fit: contain; background: #5b854d; }
   .video-slot-media {
     border-radius: 14px; border: 3px solid rgba(255,255,255,0.85);
     box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-    background: #12a454;
+    background: #5b854d;
   }
   .slot .empty-hint { font-size: 22px; opacity: 0; }
   .slot.shake { animation: shakeAnim 0.4s; }
@@ -169,7 +176,7 @@
   .word-btn.icon-only { padding: 5px; }
   .word-btn.icon-only .word-thumb {
     width: 54px; height: 54px; font-size: 28px; border: 3px solid #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.25); background: #12a454;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25); background: #5b854d;
   }
   .word-btn.icon-only .word-thumb video { object-fit: contain; }
   .btn-action {
@@ -216,32 +223,35 @@
 <div class="toast" id="toast"></div>
 
 <div class="stage" id="mainApp" style="display:none;">
-  <img class="bg-img" id="bgImage" src="familyTree.jpg" alt="Family Tree">
+  <div class="game-frame" id="gameFrame">
+    <img class="bg-img" id="bgImage" src="familyTree.jpg" alt="Family Tree">
 
-  <div class="top-overlay">
-    <div class="glass-card">
-      <div class="header">🌳 Unit 4: Strong Ties - Family Members</div>
-      <div class="user-info" id="userInfo">Player: -</div>
-      <div class="progress-wrap">
-        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
-        <div class="progress-label" id="progressLabel">0 / 10</div>
+    <div class="top-overlay">
+      <div class="glass-card">
+        <div class="header">🌳 Unit 4: Strong Ties - Family Members</div>
+        <div class="user-info" id="userInfo">Player: -</div>
+        <div class="progress-wrap">
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+          <div class="progress-label" id="progressLabel">0 / 10</div>
+        </div>
       </div>
+      <div class="instruction" id="instructionText">แตะคำศัพท์ด้านล่าง แล้วแตะ➕ที่ช่องที่คิดว่าใช่</div>
     </div>
-    <div class="instruction" id="instructionText">แตะคำศัพท์ด้านล่าง แล้วแตะ➕ที่ช่องที่คิดว่าใช่</div>
-  </div>
 
-  <div class="slots-layer" id="slotsLayer"></div>
+    <div class="slots-layer" id="slotsLayer"></div>
 
-  <div class="bottom-overlay">
-    <div class="wordbank-wrap">
-      <div class="wordbank-title" id="bankTitlePart1">คำศัพท์หลัก</div>
-      <div class="wordbank" id="wordbankPart1"></div>
-      <div class="wordbank-title" id="bankTitlePart2" style="display:none; margin-top:6px;">คำเรียกลำลอง (จับคู่กับคำในต้นไม้)</div>
-      <div class="wordbank" id="wordbankPart2" style="display:none;"></div>
-      <button class="btn-action disabled" id="submitBtn" style="width:100%; margin-top:8px;" onclick="gradeAndFinish()">📩 ส่งคำตอบ</button>
+    <div class="bottom-overlay">
+      <div class="wordbank-wrap">
+        <div class="wordbank-title" id="bankTitlePart1">คำศัพท์หลัก</div>
+        <div class="wordbank" id="wordbankPart1"></div>
+        <div class="wordbank-title" id="bankTitlePart2" style="display:none; margin-top:6px;">คำเรียกลำลอง (จับคู่กับคำในต้นไม้)</div>
+        <div class="wordbank" id="wordbankPart2" style="display:none;"></div>
+        <button class="btn-action disabled" id="submitBtn" style="width:100%; margin-top:8px;" onclick="gradeAndFinish()">📩 ส่งคำตอบ</button>
+      </div>
     </div>
   </div>
 </div>
+
 
 <script>
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxd_UGE1ZY_1dcB3B7l0Vy8azxhuuFoc_kftJ7QZ1Nc4XIaXGKF9RPs8WxhZ0K5VyVN/exec';
@@ -288,33 +298,6 @@
     return a;
   }
 
-  // Positions the invisible tap-zones exactly on top of the artwork's boxes,
-  // matching how the browser crops the background image with object-fit:cover.
-  function layoutSlots() {
-    const img = document.getElementById('bgImage');
-    const stage = document.getElementById('mainApp');
-    const nw = img.naturalWidth, nh = img.naturalHeight;
-    if (!nw || !nh) return;
-
-    const cw = stage.clientWidth, ch = stage.clientHeight;
-    const scale = Math.max(cw / nw, ch / nh);
-    const dispW = nw * scale, dispH = nh * scale;
-    const offsetX = (cw - dispW) / 2, offsetY = (ch - dispH) / 2;
-
-    coreWords.forEach(w => {
-      const el = document.getElementById('slot-' + w.id);
-      if (!el) return;
-      el.style.left = (offsetX + (w.pos.left / 100) * dispW) + 'px';
-      el.style.top = (offsetY + (w.pos.top / 100) * dispH) + 'px';
-      el.style.width = ((w.pos.width / 100) * dispW) + 'px';
-      el.style.height = ((w.pos.height / 100) * dispH) + 'px';
-    });
-  }
-
-  window.addEventListener('resize', layoutSlots);
-  window.addEventListener('orientationchange', layoutSlots);
-  document.getElementById('bgImage').addEventListener('load', layoutSlots);
-
   window.onload = () => {
     if (localStorage.getItem('ft_name')) {
       document.getElementById('m_name').value = localStorage.getItem('ft_name');
@@ -343,7 +326,6 @@
     document.getElementById('loginModal').classList.remove('active');
     document.getElementById('mainApp').style.display = 'block';
     buildGame();
-    layoutSlots();
   }
 
   function buildGame() {
@@ -352,6 +334,10 @@
       const slot = document.createElement('div');
       slot.className = 'slot selectable';
       slot.id = 'slot-' + w.id;
+      slot.style.left = w.pos.left + '%';
+      slot.style.top = w.pos.top + '%';
+      slot.style.width = w.pos.width + '%';
+      slot.style.height = w.pos.height + '%';
       slot.innerHTML = `<span class="empty-hint">＋</span>
         <button class="speaker-btn" onclick="event.stopPropagation(); playAudio('${w.audio}')">🔊</button>`;
       slot.addEventListener('click', () => onSlotTap(w.id));
